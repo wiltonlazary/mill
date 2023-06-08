@@ -14,7 +14,8 @@ trait ZincWorkerApi {
       sources: Agg[os.Path],
       compileClasspath: Agg[os.Path],
       javacOptions: Seq[String],
-      reporter: Option[CompileProblemReporter]
+      reporter: Option[CompileProblemReporter],
+      reportCachedProblems: Boolean
   )(implicit ctx: ZincWorkerApi.Ctx): mill.api.Result[CompilationResult]
 
   /** Compile a mixed Scala/Java or Scala-only project */
@@ -28,12 +29,11 @@ trait ZincWorkerApi {
       scalacOptions: Seq[String],
       compilerClasspath: Agg[PathRef],
       scalacPluginClasspath: Agg[PathRef],
-      reporter: Option[CompileProblemReporter]
+      reporter: Option[CompileProblemReporter],
+      reportCachedProblems: Boolean
   )(implicit ctx: ZincWorkerApi.Ctx): mill.api.Result[CompilationResult]
 
-  def discoverMainClasses(compilationResult: CompilationResult)(implicit
-      ctx: ZincWorkerApi.Ctx
-  ): Seq[String]
+  def discoverMainClasses(compilationResult: CompilationResult): Seq[String]
 
   def docJar(
       scalaVersion: String,

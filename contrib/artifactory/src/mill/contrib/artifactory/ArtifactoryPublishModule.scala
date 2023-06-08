@@ -94,7 +94,5 @@ object ArtifactoryPublishModule extends ExternalModule {
     }
   }
 
-  implicit def millScoptTargetReads[T] = new mill.main.Tasks.Scopt[T]()
-
   lazy val millDiscover: mill.define.Discover[this.type] = mill.define.Discover[this.type]
 }

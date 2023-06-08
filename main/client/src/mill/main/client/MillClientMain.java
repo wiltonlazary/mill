@@ -43,7 +43,7 @@ public class MillClientMain {
     static void initServer(String lockBase, boolean setJnaNoSys) throws IOException, URISyntaxException {
         List<String> l = new ArrayList<>();
         l.addAll(MillEnv.millLaunchJvmCommand(setJnaNoSys));
-        l.add("mill.main.MillServerMain");
+        l.add("mill.runner.MillServerMain");
         l.add(lockBase);
 
         File stdout = new java.io.File(lockBase + "/stdout");
@@ -164,7 +164,7 @@ public class MillClientMain {
 
         try (FileOutputStream f = new FileOutputStream(lockBase + "/run")) {
             f.write(System.console() != null ? 1 : 0);
-            Util.writeString(f, BuildInfo.millVersion());
+            Util.writeString(f, BuildInfo.millVersion);
             Util.writeArgs(args, f);
             Util.writeMap(env, f);
         }
