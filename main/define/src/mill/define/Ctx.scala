@@ -1,7 +1,5 @@
 package mill.define
 
-import os.Path
-
 import scala.annotation.implicitNotFound
 
 /**
@@ -20,7 +18,7 @@ import scala.annotation.implicitNotFound
  * @param enclosingCls
  * @param crossValues
  */
-@implicitNotFound("Modules, Targets and Commands can only be defined within a mill Module")
+@implicitNotFound("Modules and Tasks can only be defined within a mill Module")
 trait Ctx {
   def enclosing: String
   def lineNum: Int
@@ -31,12 +29,14 @@ trait Ctx {
   def foreign: Option[Segments]
   def fileName: String
   def enclosingCls: Class[_]
+  def enclosingModule: Any = null
   def crossValues: Seq[Any]
 
   private[mill] def withCrossValues(crossValues: Seq[Any]): Ctx
   private[mill] def withMillSourcePath(millSourcePath: os.Path): Ctx
   private[mill] def withSegment(segment: Segment): Ctx
   private[mill] def withSegments(segments: Segments): Ctx
+  private[mill] def withEnclosingModule(enclosingModule: Any): Ctx = this
 }
 
 object Ctx {
@@ -49,13 +49,16 @@ object Ctx {
       external: Boolean,
       foreign: Option[Segments],
       fileName: String,
-      enclosingCls: Class[_],
+      override val enclosingModule: Any,
       crossValues: Seq[Any]
   ) extends Ctx {
+    def enclosingCls = enclosingModule.getClass
     def withCrossValues(crossValues: Seq[Any]): Ctx = copy(crossValues = crossValues)
     def withMillSourcePath(millSourcePath: os.Path): Ctx = copy(millSourcePath = millSourcePath)
     def withSegment(segment: Segment): Ctx = copy(segment = segment)
     def withSegments(segments: Segments): Ctx = copy(segments = segments)
+    override def withEnclosingModule(enclosingModule: Any): Ctx =
+      copy(enclosingModule = enclosingModule)
   }
 
   /**
@@ -98,7 +101,7 @@ object Ctx {
       external0.value,
       foreign0.value,
       fileName.value,
-      enclosing.value.getClass,
+      enclosing.value,
       Seq()
     )
   }

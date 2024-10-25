@@ -15,6 +15,7 @@ import scala.concurrent.{Await, CancellationException, Promise}
 private class BspWorkerImpl() extends BspWorker {
 
   override def startBspServer(
+      topLevelBuildRoot: os.Path,
       streams: SystemStreams,
       logStream: PrintStream,
       logDir: os.Path,
@@ -23,6 +24,7 @@ private class BspWorkerImpl() extends BspWorker {
 
     val millServer =
       new MillBuildServer(
+        topLevelProjectRoot = topLevelBuildRoot,
         bspVersion = Constants.bspProtocolVersion,
         serverVersion = BuildInfo.millVersion,
         serverName = Constants.serverName,
@@ -56,9 +58,9 @@ private class BspWorkerImpl() extends BspWorker {
       val bspServerHandle = new BspServerHandle {
         private[this] var lastResult0: Option[BspServerResult] = None
 
-        override def runSession(evaluator: Evaluator): BspServerResult = {
+        override def runSession(evaluators: Seq[Evaluator]): BspServerResult = {
           lastResult0 = None
-          millServer.updateEvaluator(Option(evaluator))
+          millServer.updateEvaluator(Option(evaluators))
           val onReload = Promise[BspServerResult]()
           millServer.onSessionEnd = Some { serverResult =>
             if (!onReload.isCompleted) {

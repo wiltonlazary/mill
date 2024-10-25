@@ -1,72 +1,47 @@
 package mill.scalalib
 
-import mill.{Agg, T}
-
-import mill.util.{TestEvaluator, TestUtil}
+import mill.api.Result
+import mill.testkit.UnitTester
+import sbt.testing.Status
 import utest._
-import utest.framework.TestPath
+
+import java.io.{ByteArrayOutputStream, PrintStream}
 
 object TestRunnerTests extends TestSuite {
-  object testrunner extends TestUtil.BaseModule with ScalaModule {
-    override def millSourcePath = TestUtil.getSrcPathBase() / millOuterCtx.enclosing.split('.')
-
-    def scalaVersion = sys.props.getOrElse("TEST_SCALA_2_13_VERSION", ???)
-
-    object test extends ScalaTests with TestModule.Utest {
-      override def ivyDeps = T {
-        super.ivyDeps() ++ Agg(
-          ivy"com.lihaoyi::utest:${sys.props.getOrElse("TEST_UTEST_VERSION", ???)}"
-        )
-      }
-    }
-  }
-
-  val resourcePath = os.pwd / "scalalib" / "test" / "resources" / "testrunner"
-
-  def workspaceTest[T](
-      m: TestUtil.BaseModule,
-      resourcePath: os.Path = resourcePath
-  )(t: TestEvaluator => T)(
-      implicit tp: TestPath
-  ): T = {
-    val eval = new TestEvaluator(m)
-    os.remove.all(m.millSourcePath)
-    os.remove.all(eval.outPath)
-    os.makeDir.all(m.millSourcePath / os.up)
-    os.copy(resourcePath, m.millSourcePath)
-    t(eval)
-  }
-
+  import TestRunnerTestUtils._
   override def tests: Tests = Tests {
-    "TestRunner" - {
-      "test case lookup" - workspaceTest(testrunner) { eval =>
-        val Right((result, _)) = eval.apply(testrunner.test.test())
-        val test = result.asInstanceOf[(String, Seq[mill.testrunner.TestResult])]
-        assert(
-          test._2.size == 3
-        )
+
+    test("doneMessage") {
+      test("failure") {
+        val outStream = new ByteArrayOutputStream()
+        UnitTester(
+          testrunner,
+          outStream = new PrintStream(outStream, true),
+          sourceRoot = resourcePath
+        ).scoped { eval =>
+          val Left(Result.Failure(msg, _)) = eval(testrunner.doneMessageFailure.test())
+          val stdout = new String(outStream.toByteArray)
+          assert(stdout.contains("test failure done message"))
+          junitReportIn(eval.outPath, "doneMessageFailure").shouldHave(1 -> Status.Failure)
+        }
       }
-      "testOnly" - {
-        def testOnly(eval: TestEvaluator, args: Seq[String], size: Int) = {
-          val Right((result1, _)) = eval.apply(testrunner.test.testOnly(args: _*))
-          val testOnly = result1.asInstanceOf[(String, Seq[mill.testrunner.TestResult])]
-          assert(
-            testOnly._2.size == size
-          )
+      test("success") {
+        val outStream = new ByteArrayOutputStream()
+        UnitTester(
+          testrunner,
+          outStream = new PrintStream(outStream, true),
+          sourceRoot = resourcePath
+        ).scoped { eval =>
+          val Right(_) = eval(testrunner.doneMessageSuccess.test())
+          val stdout = new String(outStream.toByteArray)
+          assert(stdout.contains("test success done message"))
         }
-        "suffix" - workspaceTest(testrunner) { eval =>
-          testOnly(eval, Seq("*arTests"), 2)
-        }
-        "prefix" - workspaceTest(testrunner) { eval =>
-          testOnly(eval, Seq("mill.scalalib.FooT*"), 1)
-        }
-        "exactly" - workspaceTest(testrunner) { eval =>
-          testOnly(eval, Seq("mill.scalalib.FooTests"), 1)
-        }
-        "multi" - workspaceTest(testrunner) { eval =>
-          testOnly(eval, Seq("*Bar*", "*bar*"), 2)
-        }
+      }
+
+      test("null") - UnitTester(testrunner, resourcePath).scoped { eval =>
+        val Right(_) = eval(testrunner.doneMessageNull.test())
       }
     }
   }
+
 }

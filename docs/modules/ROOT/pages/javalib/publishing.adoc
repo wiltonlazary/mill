@@ -1,0 +1,12 @@
+= Publishing Java Projects
+:page-aliases: Publishing_Java_Projects.adoc
+
+include::partial$gtag-config.adoc[]
+
+This page will discuss common topics around publishing your Java projects for others to use
+
+== Publishing Locally
+
+include::partial$example/javalib/publishing/2-publish-module.adoc[]
+
+include::partial$Publishing_Footer.adoc[]

@@ -14,7 +14,7 @@ case class ImportTree(
 )
 
 /**
- * Fastparse parser that extends the Scalaparse parser to handle `build.sc` and
+ * Fastparse parser that extends the Scalaparse parser to handle `build.mill` and
  * other script files, and also for subsequently parsing any magic import
  * statements into [[ImportTree]] structures for the [[MillBuildRootModule]] to use
  */
@@ -46,30 +46,25 @@ object Parsers {
     P(`import` ~/ ImportExpr.rep(1, sep = ","./))
   }
 
-  def Prelude[$: P] = P((Annot ~ OneNLMax).rep ~ (Mod ~/ Pass).rep)
+  def Prelude[$: P]: P[Unit] = P((Annot ~ OneNLMax).rep ~ (Mod ~/ Pass).rep)
 
-  def TmplStat[$: P] = P(Import | Prelude ~ BlockDef | StatCtx.Expr)
+  def TmplStat[$: P]: P[Unit] = P(Import | Prelude ~ BlockDef | StatCtx.Expr)
 
-  def HashBang[$: P] = P(Start ~~ "#!" ~~ CharsWhile(_ != '\n') ~~ "\n")
+  def HashBang[$: P]: P[Unit] = P(Start ~~ "#!" ~~ CharsWhile(_ != '\n') ~~ "\n")
   // Do this funny ~~WS thing to make sure we capture the whitespace
   // together with each statement; otherwise, by default, it gets discarded.
   //
   // After each statement, there must either be `Semis`, a "}" marking the
   // end of the block, or the `End` of the input
-  def StatementBlock[$: P] =
+  def StatementBlock[$: P]: P[Seq[String]] =
     P(Semis.? ~ (TmplStat ~~ WS ~~ (Semis | &("}") | End)).!.repX)
 
-  def CompilationUnit[$: P] = P(HashBang.!.? ~ WL.! ~ StatementBlock ~ WL ~ End)
+  def TopPkgSeq[$: P]: P[Seq[String]] =
+    P(((scalaparse.Scala.`package` ~ QualId.!) ~~ !(WS ~ "{")).repX(1, Semis))
 
-  def stringWrap(s: String): String = "\"" + pprint.Util.literalize(s) + "\""
-  def stringSymWrap(s: String): String = {
-    def idToEnd[$: P] = P(scalaparse.syntax.Identifiers.Id ~ End)
-    if (s == "") "'"
-    else parse(s, idToEnd(_)) match {
-      case Parsed.Success(v, _) => "'" + s
-      case f: Parsed.Failure => stringWrap(s)
-    }
-  }
+  def CompilationUnit[$: P]: P[(Option[Seq[String]], String, Seq[String])] =
+    P(Semis.? ~ TopPkgSeq.? ~~ WL.! ~~ StatementBlock ~ WL ~ End)
+
   def parseImportHooksWithIndices(stmts: Seq[String]): Seq[(String, Seq[ImportTree])] = {
     val hookedStmts = mutable.Buffer.empty[(String, Seq[ImportTree])]
     for (stmt <- stmts) {
@@ -81,7 +76,10 @@ object Parsers {
         case Parsed.Success(parsedTrees, _) =>
           val importTrees = mutable.Buffer.empty[ImportTree]
           for (importTree <- parsedTrees) {
-            if (importTree.prefix(0)._1(0) == '$') importTrees.append(importTree)
+            importTree.prefix match {
+              case Seq((s"$$$rest", _), _*) => importTrees.append(importTree)
+              case _ => // donothing
+            }
           }
           hookedStmts.append((stmt, importTrees.toSeq))
       }
@@ -109,11 +107,11 @@ object Parsers {
    * is returned separately so we can later manipulate the statements e.g.
    * by adding `val res2 = ` without the whitespace getting in the way
    */
-  def splitScript(rawCode: String, fileName: String): Either[String, Seq[String]] = {
+  def splitScript(rawCode: String, fileName: String): Either[String, (Seq[String], Seq[String])] = {
     parse(rawCode, CompilationUnit(_)) match {
       case f: Parsed.Failure => Left(formatFastparseError(fileName, rawCode, f))
-      case s: Parsed.Success[(Option[String], String, Seq[String])] =>
-        Right(s.value._1.toSeq.map(_ => "\n") ++ Seq(s.value._2) ++ s.value._3)
+      case s: Parsed.Success[(Option[Seq[String]], String, Seq[String])] =>
+        Right(s.value._1.toSeq.flatten -> (Seq(s.value._2) ++ s.value._3))
     }
   }
 }

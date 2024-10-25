@@ -6,7 +6,7 @@ import ch.epfl.scala.bsp4j.{
   JavacOptionsParams,
   JavacOptionsResult
 }
-import mill.T
+import mill.Task
 import mill.bsp.worker.Utils.sanitizeUri
 import mill.scalalib.{JavaModule, SemanticDbJavaModule}
 
@@ -26,11 +26,18 @@ private trait MillJavaBuildServer extends JavaBuildServer { this: MillBuildServe
             sem.bspCompiledClassesAndSemanticDbFiles
           case _ => m.bspCompileClassesPath
         }
-        T.task { (classesPathTask(), m.javacOptions(), m.bspCompileClasspath()) }
+        Task.Anon {
+          (
+            classesPathTask(),
+            m.javacOptions() ++ m.mandatoryJavacOptions(),
+            m.bspCompileClasspath()
+          )
+        }
       }
     ) {
-      case (state, id, m: JavaModule, (classesPath, javacOptions, bspCompileClasspath)) =>
-        val pathResolver = evaluator.pathsResolver
+      // We ignore all non-JavaModule
+      case (ev, state, id, m: JavaModule, (classesPath, javacOptions, bspCompileClasspath)) =>
+        val pathResolver = ev.pathsResolver
         val options = javacOptions
         val classpath =
           bspCompileClasspath.map(_.resolve(pathResolver)).map(sanitizeUri)

@@ -1,21 +1,20 @@
 package mill.runner
 
 import mill.api.{PathRef, Val, internal}
-import mill.define.{BaseModule, Segments}
+import mill.define.Segments
 import mill.util.Watchable
 import upickle.default.{ReadWriter, macroRW}
-import mill.api.JsonFormatters._
 import mill.eval.Evaluator
 import mill.main.RootModule
 
 /**
  * This contains a list of frames each representing cached data from a single
- * level of `build.sc` evaluation:
+ * level of `build.mill` evaluation:
  *
  * - `frame(0)` contains the output of evaluating the user-given targets
- * - `frame(1)` contains the output of `build.sc` file compilation
+ * - `frame(1)` contains the output of `build.mill` file compilation
  * - `frame(2)` contains the output of the in-memory [[MillBuildRootModule.BootstrapModule]]
- * - If there are meta-builds present (e.g. `mill-build/build.sc`), then `frame(2)`
+ * - If there are meta-builds present (e.g. `mill-build/build.mill`), then `frame(2)`
  *   would contains the output of the meta-build compilation, and the in-memory
  *   bootstrap module would be pushed to a higher frame
  *
@@ -33,7 +32,10 @@ case class RunnerState(
     frames: Seq[RunnerState.Frame],
     errorOpt: Option[String]
 ) {
-  def add(frame: RunnerState.Frame = RunnerState.Frame.empty, errorOpt: Option[String] = None) = {
+  def add(
+      frame: RunnerState.Frame = RunnerState.Frame.empty,
+      errorOpt: Option[String] = None
+  ): RunnerState = {
     this.copy(frames = Seq(frame) ++ frames, errorOpt = errorOpt)
   }
 }
@@ -45,29 +47,30 @@ object RunnerState {
     // Random ID of the URLClassLoader to ensure it doesn't
     // duplicate (unlike System.identityHashCode), allowing tests to compare
     // hashcodes to verify whether the classloader has been re-created
-    val identity = scala.util.Random.nextInt()
+    val identity: Int = scala.util.Random.nextInt()
   }
 
-  def empty = RunnerState(None, Nil, None)
+  def empty: RunnerState = RunnerState(None, Nil, None)
 
   @internal
   case class Frame(
       workerCache: Map[Segments, (Int, Val)],
       evalWatched: Seq[Watchable],
       moduleWatched: Seq[Watchable],
-      scriptImportGraph: Map[os.Path, (Int, Seq[os.Path])],
+      methodCodeHashSignatures: Map[String, Int],
       classLoaderOpt: Option[RunnerState.URLClassLoader],
-      runClasspath: Seq[PathRef]
+      runClasspath: Seq[PathRef],
+      compileOutput: Option[PathRef],
+      evaluator: Option[Evaluator]
   ) {
 
-    def loggedData = {
+    def loggedData: Frame.Logged = {
       Frame.Logged(
         workerCache.map { case (k, (i, v)) =>
           (k.render, Frame.WorkerInfo(System.identityHashCode(v), i))
         },
         evalWatched.collect { case Watchable.Path(p) => p },
         moduleWatched.collect { case Watchable.Path(p) => p },
-        scriptImportGraph,
         classLoaderOpt.map(_.identity),
         runClasspath,
         runClasspath.hashCode()
@@ -90,14 +93,13 @@ object RunnerState {
         workerCache: Map[String, WorkerInfo],
         evalWatched: Seq[PathRef],
         moduleWatched: Seq[PathRef],
-        scriptImportGraph: Map[os.Path, (Int, Seq[os.Path])],
         classLoaderIdentity: Option[Int],
         runClasspath: Seq[PathRef],
         runClasspathHash: Int
     )
     implicit val loggedRw: ReadWriter[Logged] = macroRW
 
-    def empty = Frame(Map.empty, Nil, Nil, Map.empty, None, Nil)
+    def empty: Frame = Frame(Map.empty, Nil, Nil, Map.empty, None, Nil, None, null)
   }
 
 }
